@@ -9,7 +9,16 @@ stores, so rollback makes later evidence pending again rather than destroying it
 
 ## Episodes
 
-Use a new `.kiro/memory/episodes/<UTC-timestamp>-<random-suffix>.md`:
+Use a new `.kiro/memory/episodes/<UTC-timestamp>-<topic-slug>.md`. The timestamp is
+`YYYYMMDDTHHMMSSZ` and keeps the queue in chronological order; the slug is a short
+lowercase kebab-case phrase naming the subject, normally the episode's own title. The
+slug is what makes pending evidence triageable from `status` output without opening
+each file, so name the subject, not the occasion:
+
+```text
+20260906T103000Z-deployment-tooling-correction.md
+```
+
 
 ```markdown
 # Deployment tooling correction
@@ -28,6 +37,12 @@ Use Foundry for tests; retain Hardhat for deployment in this project.
 ## Limits
 No production deployment was performed or verified in this conversation.
 ```
+
+Filenames must be unique. If the name you want already exists, make the slug more
+specific rather than appending a random suffix. Once a dream has processed an episode,
+its filename is a key in that store's `processed.json`: renaming it then makes the
+episode look new and leaves the ledger entry dangling, so rename only unprocessed
+episodes, and never edit an episode's content in place.
 
 The example is fictional; never seed it as user memory. Use actual evidence and date.
 Record relevant repository paths and observed check outcomes where available.

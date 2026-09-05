@@ -7,6 +7,12 @@ description: Consolidate this project's memory. Mines recent Claude Code session
 Consolidate `.claude/dreaming/` from recent session transcripts. Runs in this
 conversation; no API keys, no background workers, no model calls outside this chat.
 
+A `SessionEnd` hook marks `.claude/dreaming/.dream-pending` when a session closes, and
+session start reports it. That means a dream normally covers the session that just
+ended, consolidating it at the start of the next one — the transcript is already on
+disk, so nothing is lost by doing it after the fact. Keep the run brief when it precedes
+the user's first request, and skip it in one clause if that request is urgent.
+
 Memory lives in `.claude/dreaming/MEMORY.md` (index) and `.claude/dreaming/topics/*.md`.
 This is project memory for this repository, separate from the user-level memory
 directory under `~/.claude/projects/<project>/memory/`.
@@ -90,10 +96,11 @@ Rewrite `MEMORY.md`: the date, one table row per topic file, and a Quick referen
 most ten lines that matter in every session. The index holds links and summaries, never
 full entries. Keep it under 100 lines. Every linked file must exist.
 
-Then record the run:
+Then record the run and clear the pending marker:
 
 ```bash
 date +%s > .claude/dreaming/.last-dream
+rm -f .claude/dreaming/.dream-pending
 ```
 
 ## Report

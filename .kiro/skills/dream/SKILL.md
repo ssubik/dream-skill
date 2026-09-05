@@ -7,6 +7,11 @@ description: Consolidate this project's memory. Reviews saved notes and the curr
 Consolidate `.kiro/dreaming/` in this conversation. No API keys, no background workers,
 no model calls outside this chat.
 
+Session start reports a dream is due when any topic file changed after the last
+consolidation — that is, when `remember` captured something in a previous session. Keep
+the run brief when it precedes the user's first request, and skip it in one clause if
+that request is urgent.
+
 Memory lives in `.kiro/dreaming/MEMORY.md` (index) and `.kiro/dreaming/topics/*.md`.
 Kiro conversation transcripts are not readable from disk, so this kit consolidates what
 the `remember` skill captured plus what is visible in the current conversation. Never

@@ -21,7 +21,9 @@ Before finishing work that establishes a durable decision, explicit correction, 
 preference, or verified lesson, use the `remember` skill. Skip routine activity,
 speculation, and anything the code already states.
 
-Use the `dream` skill to consolidate. If a session starts with the hook reporting that a
-dream is due, mention it once at a natural stopping point rather than interrupting the
-request; run it when the user agrees. This is project memory for this repository, and is
-separate from the user-level memory directory under `~/.claude/projects/`.
+Consolidation is tied to closing a session, not to a clock. A `SessionEnd` hook marks
+`.claude/dreaming/.dream-pending`; when session start reports it, run the `dream` skill
+first, before the user's request, report the result in a line or two, then carry on. Skip
+it in one clause if the request is urgent, and leave the marker in place so the next
+session picks it up. This is project memory for this repository, and is separate from the
+user-level memory directory under `~/.claude/projects/`.

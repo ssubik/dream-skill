@@ -18,6 +18,7 @@ calls outside your chat. This is not Anthropic's Managed Agents Dreams API.
     topics/*.md      the memory       topics/*.md
     .backups/        pre-dream copies  .backups/
     .last-dream      timestamp         .last-dream
+    .dream-pending   set at session end
 ```
 
 Skills, steering, and hooks must stay in those locations or neither tool finds them.
@@ -31,10 +32,26 @@ agent maintains its own memory and never writes into the other's folder.
 | Work normally | The agent reads relevant topics first and records durable outcomes before finishing. |
 | `/remember We use X for tests but Y for deploys.` | Appends one dated, scoped line to the right topic file. |
 | `/dream` | Consolidates: backs up, merges new signal, rewrites the index. |
-| Session start, 24h since last dream | The hook prints that a dream is due; the agent offers it at a natural stopping point. |
+| Close a session | A `SessionEnd` hook marks it pending; the next session consolidates it first thing. |
 
 Capture is best-effort — it happens when the agent judges something durable was
 established. Use `/remember` explicitly when you want certainty.
+
+## When dreaming runs
+
+A hook cannot make the model do anything: it runs a shell command, and once a session
+closes there is no model left to consolidate. So closing a session only *marks* the work,
+and the next session does it — which costs nothing, because the transcript is already on
+disk and can be mined after the fact.
+
+For Claude Code, a `SessionEnd` hook touches `.claude/dreaming/.dream-pending`, and
+session start reports it so the dream runs before the first request and clears the marker.
+Kiro's hook support for session end is not documented, so its trigger needs only session
+start: it reports a dream is due when any topic file changed after `.last-dream`, meaning
+`/remember` captured something you have not consolidated yet.
+
+Either way, typing `/dream` as your last action before leaving works too, and runs the
+consolidation there and then instead of at the next session.
 
 ## How the two differ
 

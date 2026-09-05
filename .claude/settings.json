@@ -1,12 +1,22 @@
 {
   "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "touch .claude/dreaming/.dream-pending"
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "matcher": "startup|resume|clear",
         "hooks": [
           {
             "type": "command",
-            "command": "test -z \"$(find .claude/dreaming/.last-dream -mtime -1 2>/dev/null)\" && echo 'Memory: a dream is due (no consolidation in the last 24h). Offer /dream at a natural stopping point.' || true"
+            "command": "if [ -e .claude/dreaming/.dream-pending ] || [ ! -e .claude/dreaming/.last-dream ]; then echo 'Memory: the previous session ended without consolidating. Run the dream skill now, before the user request, then continue.'; fi"
           }
         ]
       }

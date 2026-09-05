@@ -3,11 +3,11 @@
   "hooks": [
     {
       "name": "Dream memory readiness",
-      "description": "Report whether a memory consolidation is due. Starts no LLM job.",
+      "description": "Report whether memory changed since the last consolidation. Starts no LLM job.",
       "trigger": "SessionStart",
       "action": {
         "type": "command",
-        "command": "test -z \"$(find .kiro/dreaming/.last-dream -mtime -1 2>/dev/null)\" && echo 'Memory: a dream is due (no consolidation in the last 24h). Offer /dream at a natural stopping point.' || true"
+        "command": "if [ ! -e .kiro/dreaming/.last-dream ] || [ -n \"$(find .kiro/dreaming/topics -name '*.md' -newer .kiro/dreaming/.last-dream 2>/dev/null)\" ]; then echo 'Memory: notes were captured since the last consolidation. Run the dream skill now, before the user request, then continue.'; fi"
       },
       "timeout": 10
     }

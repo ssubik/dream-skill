@@ -22,6 +22,8 @@ routine activity, speculation, repeated facts, and memory maintenance itself. Ne
 credentials. Respect requests not to record something.
 
 ## Reflect
-Use the `dream` skill when asked to consolidate, or when session start reports a dream is
-due — mention it once at a natural stopping point rather than interrupting the request.
-Supersede rather than delete, keep scope with each claim, and never prune by age.
+Consolidation is tied to captured notes, not to a clock. Session start reports a dream is
+due when `remember` appended anything after the last consolidation. Run the `dream` skill
+first when that happens, report the result in a line or two, then carry on; skip it in one
+clause if the request is urgent. Supersede rather than delete, keep scope with each claim,
+and never prune by age.

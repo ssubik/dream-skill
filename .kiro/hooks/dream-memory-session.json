@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Dream memory readiness",
+      "description": "Report memory version and pending episodes without starting an LLM job.",
+      "trigger": "SessionStart",
+      "action": {
+        "type": "command",
+        "command": "python3 .kiro/skills/dream/scripts/memory.py status"
+      },
+      "timeout": 10
+    }
+  ]
+}

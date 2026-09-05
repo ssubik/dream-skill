@@ -75,25 +75,36 @@ describe the inputs as saved episodes and existing memory.
 
 Run this only when session-start status reports `unattended_recommended`, and keep it
 brief: it precedes the user's actual request. Skip it and say so in one clause if their
-request is urgent or clearly unrelated.
+request is urgent or clearly unrelated. If status reports `blocked_by_candidates`, do
+not start a new dream: report the waiting candidate and let the user decide.
 
-1. Follow Consolidation steps 1-6 with one restriction: add new topics and new `## `
-   claim sections from the selected episodes, and leave every existing claim, its
-   wording, and the existing index lines untouched. Only `updated:` may change in
-   existing frontmatter. Ignore the batch-continuation step; one batch per session.
-2. If the evidence mainly calls for merging duplicates, reconciling a conflict, or
-   superseding an existing claim, stop and leave the candidate for an attended `/dream`.
-   Report the candidate ID rather than working around the restriction.
-3. Confirm with `validate --dream <id> --unattended`, then promote with
-   `promote <id> --unattended`. The helper enforces the restriction independently. A
-   rejection means reflection rewrote something: leave that candidate for review and do
-   not retry without the flag.
-4. Report one or two lines - new version, what was added, any candidate awaiting review.
+1. Follow Consolidation steps 1-6 under two restrictions. Add only new topics and new
+   `## ` claim sections, leaving existing claims, their wording, and existing index
+   lines untouched; only `updated:` may change in existing frontmatter. And never add a
+   claim whose `Kind:` is `correction` or `unresolved`, because those exist to act on
+   prior claims.
+2. Preserving old text does not stop a new section from contradicting it. Read the
+   existing claims in each topic you touch and defer any addition that disagrees with
+   one, narrows its scope, or reports a different outcome for the same question.
+3. List every selected episode you did not fully incorporate in `<dream>/deferred.json`,
+   as a JSON array of episode filenames. Promotion marks selected episodes processed, so
+   an episode omitted from that list silently leaves the queue; deferring keeps it
+   pending for an attended dream. Still account for it in `report.md`.
+4. If you would defer every selected episode, promote nothing. Report the candidate ID
+   and that an attended `/dream` is needed.
+5. Confirm with `validate --dream <id> --unattended`, then promote with
+   `promote <id> --unattended`. The helper enforces these restrictions independently. A
+   rejection means reflection rewrote or reversed something: leave that candidate for
+   review and do not retry without the flag.
+6. Report one or two lines - new version, what was added, what was deferred and why, and
+   any candidate awaiting review.
 
-The helper checks only that prior evidence was not overwritten; it cannot judge whether
-an addition is true. Keep unattended additions conservative, attributed, and scoped.
-When `compaction_recommended` is true, say once that an attended `/dream` is due:
-duplicates accumulate under an additive-only lane and only reconciliation removes them.
+The helper checks only that prior evidence was not overwritten and that no reconciling
+kind was added; it cannot judge whether an addition is true, nor detect a contradiction
+stated as a plain fact. That judgement is step 2, and it is yours. Keep unattended
+additions conservative, attributed, and scoped. When `compaction_recommended` is true,
+say once that an attended `/dream` is due: duplicates accumulate under an additive-only
+lane and only reconciliation removes them.
 
 ## Boundaries
 

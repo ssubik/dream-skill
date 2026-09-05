@@ -219,6 +219,85 @@ class MemoryTests(unittest.TestCase):
         self.assertFalse((self.root / "dreams" / name / "unattended").exists())
         self.assertEqual(self.run_quiet(memory.status)["unattended_streak"], 0)
 
+    def episodes(self, count=3):
+        for index in range(count):
+            (self.root / f"episodes/e{index}.md").write_text(f"Claim {index}")
+        return [f"e{index}.md" for index in range(count)]
+
+    def additions(self, path):
+        """A minimal, valid additive candidate on top of an empty store."""
+        (path / "output/topics").mkdir(exist_ok=True)
+        (path / "output/topics/testing.md").write_text(self.topic())
+        (path / "output/MEMORY.md").write_text(
+            "# Memory Index\n- [Testing](topics/testing.md) — Test workflow.\n")
+
+    def test_unattended_promotion_rejects_an_added_correction(self):
+        self.store_with_topic()
+        (self.root / "episodes/two.md").write_text("Supersedes the runner claim")
+        name, path = self.candidate()
+        # Existing text is preserved, but the new section reverses its meaning.
+        (path / "output/topics/testing.md").write_text(self.topic() + (
+            "\n## Runner correction\nKind: correction\nScope: repository\n"
+            "Evidence: episode two\nCedar replaces the previous runner.\n"))
+        with self.assertRaisesRegex(ValueError, "cannot add a 'correction' claim"):
+            memory.promote(name, True)
+        self.assertEqual(memory.active()[0], self.store)
+        self.run_quiet(memory.promote, name)  # Attended review may still apply it.
+        self.assertEqual(memory.active()[0], name)
+
+    def test_deferred_episodes_stay_pending_after_promotion(self):
+        names = self.episodes()
+        name, path = self.candidate()
+        self.additions(path)
+        (path / "deferred.json").write_text(json.dumps([names[2]]))
+        result = self.run_quiet(memory.promote, name, True)
+        self.assertEqual(result["deferred"], [names[2]])
+        # The unapplied correction is still queued; the incorporated ones are not.
+        self.assertEqual([p.name for p in memory.pending(memory.active()[1])], [names[2]])
+
+    def test_unattended_promotion_refuses_when_everything_was_deferred(self):
+        names = self.episodes()
+        name, path = self.candidate()
+        self.additions(path)
+        (path / "deferred.json").write_text(json.dumps(names))
+        with self.assertRaisesRegex(ValueError, "Every selected episode was deferred"):
+            memory.promote(name, True)
+        self.assertEqual(memory.active()[0], "initial")
+
+    def test_deferred_list_must_name_episodes_from_this_dream(self):
+        self.episodes()
+        name, path = self.candidate()
+        self.additions(path)
+        (path / "deferred.json").write_text(json.dumps(["not-selected.md"]))
+        with self.assertRaisesRegex(ValueError, "not part of this dream"):
+            memory.promote(name, True)
+        (path / "deferred.json").write_text(json.dumps({"e0.md": True}))
+        with self.assertRaisesRegex(ValueError, "list of episode filenames"):
+            memory.promote(name, True)
+
+    def test_a_waiting_candidate_blocks_another_automatic_attempt(self):
+        self.episodes()
+        ready = self.run_quiet(memory.status)
+        self.assertTrue(ready["unattended_recommended"])
+        self.assertFalse(ready["blocked_by_candidates"])
+        self.candidate()  # A rejected or previewed candidate awaits a human decision.
+        blocked = self.run_quiet(memory.status)
+        self.assertTrue(blocked["blocked_by_candidates"])
+        self.assertFalse(blocked["unattended_recommended"])
+        self.assertEqual(blocked["pending_count"], 3)
+
+    def test_cadence_follows_promotion_time_not_candidate_creation(self):
+        name = self.store_with_topic()
+        marker = self.root / "dreams" / name / "promoted-at"
+        self.assertTrue(marker.is_file())
+        stamp = memory.consolidated_at(name)
+        # An old candidate applied today is recent, despite its older identifier.
+        self.assertLess((memory.datetime.now(memory.timezone.utc) - stamp).total_seconds(), 60)
+        marker.write_text("2020-01-01T00:00:00Z\n")
+        self.assertGreater(self.run_quiet(memory.status)["hours_since_consolidation"], 24)
+        marker.unlink()  # Versions promoted before the marker fall back to the stamp.
+        self.assertIsNotNone(memory.consolidated_at(name))
+
     def test_unreviewed_episode_and_modified_snapshot_rejected(self):
         (self.root / "episodes/one.md").write_text("Original")
         name, path = self.candidate()

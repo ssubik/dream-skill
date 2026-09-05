@@ -85,13 +85,25 @@ index. Do not index raw episodes, reports, or old stores. An empty index is vali
 `promote --unattended` accepts a candidate only if it adds. New topics and new `## `
 sections are allowed, and `updated:` may change; existing claim text, other frontmatter
 fields, and existing index lines must stay byte-identical apart from trailing blank
-lines. Merging duplicates, rewording, reconciling a conflict, and retiring a claim all
-require an attended `/dream`. The check is structural: it proves nothing was overwritten,
-not that an addition is correct.
+lines. A new section may not carry `Kind: correction` or `Kind: unresolved`, since those
+kinds exist to act on an existing claim. Merging duplicates, rewording, reconciling a
+conflict, and retiring a claim all require an attended `/dream`.
+
+The check is structural. It proves nothing was overwritten and no reconciling kind was
+added; it cannot tell whether an addition is true, and it cannot detect a contradiction
+written as an ordinary `fact` or `decision`. Guard that by reading a topic's existing
+claims before appending to it.
+
+`<dream>/deferred.json` is an optional JSON array of selected episode filenames the
+reflection did not incorporate. Promotion marks every other selected episode processed,
+so a correction the additive lane could not apply must be listed here to stay pending;
+otherwise it leaves the queue unresolved. Deferring all of them refuses the promotion.
 
 Because additions accumulate, `status` reports `compaction_recommended` when the index
 passes three quarters of its limit or several unattended versions have run with no
 reconciliation. Treat that as the signal to run an attended dream, not as an error.
+A candidate awaiting a decision sets `blocked_by_candidates`, which stops the unattended
+lane from retrying the same evidence and piling up candidates.
 
 ## Retention and concurrency
 

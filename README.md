@@ -53,11 +53,20 @@ decides what to do with it. Disable it by setting `enabled: false` in its JSON.
 Reflection runs in one of two lanes, separated by authority rather than by schedule.
 
 **Unattended** runs at session start when status reports `unattended_recommended` —
-at least three pending episodes and roughly a day since the last consolidation. It may
-only add new topics and new claims, and it promotes itself. The helper enforces that
-independently of the model: existing claim text, topic metadata, and index lines must
-stay byte-identical, so an unattended run cannot quietly reword a memory you rely on.
-A candidate that tries is rejected and waits for review.
+at least three pending episodes, roughly a day since the last *promotion*, and no
+candidate already waiting for a decision. It may only add new topics and new claims, and
+it promotes itself. The helper enforces that independently of the model: existing claim
+text, topic metadata, and index lines must stay byte-identical, and a new section may
+not carry `Kind: correction` or `Kind: unresolved`. A candidate that tries is rejected
+and waits for review, and `blocked_by_candidates` stops the lane retrying the same
+evidence while it waits.
+
+Preserving old text does not by itself prevent a new section from contradicting an
+existing claim, and the helper cannot detect a contradiction written as an ordinary
+fact. Refusing the reconciling kinds narrows that gap; the rest is a judgement the skill
+requires before appending to a topic. Anything the lane cannot apply is listed in the
+candidate's `deferred.json` and stays pending, because promotion otherwise marks every
+selected episode processed and would retire an unapplied correction unresolved.
 
 **Attended `/dream`** keeps full authority: merging duplicates, reconciling conflicts,
 superseding corrected claims, and retiring stale ones.
@@ -125,9 +134,11 @@ python3 -m unittest discover -s tests -v
 Tests cover rollback, preservation of source snapshots, newly arriving episodes,
 conflicting promotions, immutable-source checks, broken indexes, symlinks, writer
 locks, evidence-bearing topic promotion, cadence and compaction signals, and the
-additive-only rule — additions accepted; rewrites, deletions, index rewording, and
-topic metadata changes rejected, with the same candidate still promotable when
-attended. The format validator checks required fields, links, and that nothing was
+additive-only rule — additions accepted; rewrites, deletions, index rewording, topic
+metadata changes, and added `correction`/`unresolved` claims rejected, with the same
+candidate still promotable when attended. They also cover deferred episodes staying
+pending, refusal when everything was deferred, a waiting candidate blocking the
+automatic lane, and cadence following promotion time rather than candidate creation. The format validator checks required fields, links, and that nothing was
 overwritten; it cannot prove a claim is true or that Opus reasoned correctly.
 
 For the first real Opus session, perform this small acceptance check:

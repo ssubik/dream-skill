@@ -25,6 +25,8 @@ INDEX_BYTES = 12288
 CADENCE_HOURS = 20
 UNATTENDED_MIN_EPISODES = 3
 COMPACT_AFTER_STREAK = 7
+# Kinds whose whole purpose is to act on an existing claim.
+RECONCILING = {"correction", "unresolved"}
 
 
 def identifier(value):
@@ -34,7 +36,16 @@ def identifier(value):
 
 
 def consolidated_at(version):
-    # Promoted versions carry their dream's UTC stamp; `initial` has none.
+    # Promotion time, not candidate creation time: applying an old preview must not
+    # make another consolidation look overdue. Falls back to the dream's own stamp
+    # for versions promoted before this marker existed.
+    marker = ROOT / "dreams" / version / "promoted-at"
+    if marker.is_file() and not marker.is_symlink():
+        try:
+            return datetime.strptime(marker.read_text(encoding="utf-8").strip(),
+                                     "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
     match = STAMP.fullmatch(version)
     return None if not match else datetime.strptime(
         match.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
@@ -178,6 +189,26 @@ def topic_blocks(text):
     return fields, blocks
 
 
+def claim_kind(block):
+    match = re.search(r"^Kind:\s*(\w+)", block, re.M)
+    return match.group(1).lower() if match else None
+
+
+def added_claims(source, candidate, before, after):
+    """Claim sections present in the candidate but absent from the source."""
+    added = []
+    for name in sorted(name for name in after if name.startswith("topics/")):
+        blocks = [b.rstrip() for b in topic_blocks((candidate / name).read_text(encoding="utf-8"))[1]]
+        if name not in before:
+            added.extend(blocks)
+            continue
+        gained = Counter(blocks)
+        gained.subtract(Counter(b.rstrip() for b in
+                                topic_blocks((source / name).read_text(encoding="utf-8"))[1]))
+        added.extend(block for block, count in gained.items() if count > 0)
+    return added
+
+
 def additive_only(source, candidate):
     """Restrict a candidate to additions, so promotion needs no human reading.
 
@@ -216,7 +247,38 @@ def additive_only(source, candidate):
             heading = lost[0].splitlines()
             raise ValueError(f"Unattended consolidation cannot rewrite existing claims: "
                              f"{name} / {heading[0].strip() if heading else 'preamble'}")
-    return {"added_topics": len(set(after) - set(before))}
+    # Preserving old text does not stop a new section from reversing its meaning, so
+    # the kinds that exist to act on prior claims are refused outright.
+    added = added_claims(source, candidate, before, after)
+    for block in added:
+        kind = claim_kind(block)
+        if kind in RECONCILING:
+            heading = block.splitlines()
+            raise ValueError(
+                f"Unattended consolidation cannot add a '{kind}' claim: "
+                f"{heading[0].strip() if heading else 'untitled'}; reconciling an existing "
+                "claim requires an attended dream")
+    return {"added_topics": len(set(after) - set(before)),
+            "added_claims": sum(1 for block in added if claim_kind(block))}
+
+
+def deferred(path, manifest):
+    """Selected episodes the reflection did not incorporate.
+
+    Promotion marks every selected episode processed, which would silently retire a
+    correction the additive lane was not allowed to apply. Listing it here keeps it
+    pending for an attended dream.
+    """
+    source = path / "deferred.json"
+    if not source.is_file() or source.is_symlink():
+        return set()
+    value = read_json(source)
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError("deferred.json must be a list of episode filenames")
+    unknown = sorted(set(value) - set(manifest["episodes"]))
+    if unknown:
+        raise ValueError(f"Deferred episodes are not part of this dream: {', '.join(unknown)}")
+    return set(value)
 
 
 def dream_path(value):
@@ -277,8 +339,10 @@ def status():
     print(json.dumps({"version": version, "pending_count": len(items),
                       "recent_pending": [str(p.relative_to(ROOT.parent.parent)) for p in items[-5:]],
                       "dream_recommended": len(items) >= 10,
-                      "unattended_recommended": len(items) >= UNATTENDED_MIN_EPISODES
+                      "unattended_recommended": not candidates
+                      and len(items) >= UNATTENDED_MIN_EPISODES
                       and (hours is None or hours >= CADENCE_HOURS),
+                      "blocked_by_candidates": bool(candidates),
                       "hours_since_consolidation": hours,
                       "unattended_streak": streak,
                       "compaction_recommended": streak >= COMPACT_AFTER_STREAK
@@ -316,8 +380,12 @@ def promote(name, unattended=False):
     path = dream_path(name)
     with lock():
         manifest, result = check_dream(path)
+        held = deferred(path, manifest)
         if unattended:
             result = {**result, **additive_only(path / "input", path / "output")}
+            if manifest["episodes"] and held == set(manifest["episodes"]):
+                raise ValueError("Every selected episode was deferred; leave this candidate "
+                                 "for an attended dream instead of promoting an unchanged store")
         version, store = active()
         if version != manifest["base"] or inventory(store) != manifest["input_hashes"]:
             raise ValueError("Active memory changed; start a fresh dream")
@@ -333,14 +401,17 @@ def promote(name, unattended=False):
         if inventory(target) != expected or inventory(path / "output") != expected:
             raise ValueError("Candidate changed while copying; active memory remains unchanged")
         processed = read_json(target / "processed.json")
-        processed.update(manifest["episodes"])
+        processed.update({name: sha for name, sha in manifest["episodes"].items()
+                          if name not in held})
         write_json(target / "processed.json", processed)
         validate(target)
         if unattended:
             (path / "unattended").write_text("additive-only promotion\n", encoding="utf-8")
+        (path / "promoted-at").write_text(
+            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") + "\n", encoding="utf-8")
         switch(name)
     print(json.dumps({"promoted": name, "previous": version, "unattended": unattended,
-                      "validation": result,
+                      "deferred": sorted(held), "validation": result,
                       "rollback": f"python3 .kiro/skills/dream/scripts/memory.py rollback {version}"}, indent=2))
 
 

@@ -35,7 +35,8 @@ Preserve unresolved conflicts and explain them in the report.
 
 When session-start status reports `unattended_recommended`, run the dream skill's
 unattended mode before substantive work: add new claims from pending episodes and
-promote with `--unattended`. That lane may not reword, merge, or supersede an existing
-claim; the helper rejects such a candidate, which then waits for an attended `/dream`.
+promote with `--unattended`. That lane may not reword, merge, supersede, or contradict
+an existing claim; anything reconciling is deferred, stays pending, and waits for an
+attended `/dream`. Do not start one when status reports `blocked_by_candidates`.
 Skip it briefly if the user's request is urgent or unrelated. Mention a waiting
 candidate or `compaction_recommended` once per conversation at a natural stopping point.

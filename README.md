@@ -35,6 +35,7 @@ JSON schema; older `.hook` formats are not installed by this kit.
 | `/dream apply <candidate-id>` | Validate and activate that candidate if its inputs remain current. |
 | `/dream rollback <version-id>` | Restore a retained version without deleting newer evidence. |
 | `/dream Review all pending episodes in batches.` | Continue until all pending saved evidence is covered. |
+| Start a session with consolidation due | Additive-only consolidation runs first and promotes itself. |
 
 Slash-command text is interpreted by Opus, not a separate command parser. For
 example, choose `/dream` from the menu and append `audit`. The Python helper has
@@ -42,9 +43,31 @@ explicit subcommands for deterministic storage operations.
 
 Capture is agent-driven and best-effort. Use `/remember` before ending an important
 session if you want explicit confirmation. The always-included steering provides
-retrieval instructions; a local SessionStart hook also reports memory readiness.
-There is deliberately no Stop-triggered reflection loop: dreaming runs on request.
-The hook makes no model calls. Disable it by setting `enabled: false` in its JSON.
+retrieval instructions; a local SessionStart hook also reports memory readiness and
+whether consolidation is due. There is deliberately no Stop-triggered reflection loop.
+The hook makes no model calls and starts no job; it only prints status, and steering
+decides what to do with it. Disable it by setting `enabled: false` in its JSON.
+
+## Two lanes
+
+Reflection runs in one of two lanes, separated by authority rather than by schedule.
+
+**Unattended** runs at session start when status reports `unattended_recommended` —
+at least three pending episodes and roughly a day since the last consolidation. It may
+only add new topics and new claims, and it promotes itself. The helper enforces that
+independently of the model: existing claim text, topic metadata, and index lines must
+stay byte-identical, so an unattended run cannot quietly reword a memory you rely on.
+A candidate that tries is rejected and waits for review.
+
+**Attended `/dream`** keeps full authority: merging duplicates, reconciling conflicts,
+superseding corrected claims, and retiring stale ones.
+
+This closes the loop without a scheduler and without a model call outside your chat:
+consolidation happens just before memory is used rather than overnight. The cost is
+that additions accumulate, since deduplication is itself a rewrite. Status reports
+`compaction_recommended` when the index passes three quarters of its cap or seven
+unattended versions have run without reconciliation; that is the cue to run `/dream`.
+Every version from either lane is one `rollback` away.
 
 ## What is stored
 
@@ -101,8 +124,11 @@ python3 -m unittest discover -s tests -v
 
 Tests cover rollback, preservation of source snapshots, newly arriving episodes,
 conflicting promotions, immutable-source checks, broken indexes, symlinks, writer
-locks, and evidence-bearing topic promotion. The format validator checks required
-fields and links; it cannot prove that a claim is true or that Opus reasoned correctly.
+locks, evidence-bearing topic promotion, cadence and compaction signals, and the
+additive-only rule — additions accepted; rewrites, deletions, index rewording, and
+topic metadata changes rejected, with the same candidate still promotable when
+attended. The format validator checks required fields, links, and that nothing was
+overwritten; it cannot prove a claim is true or that Opus reasoned correctly.
 
 For the first real Opus session, perform this small acceptance check:
 
@@ -114,6 +140,11 @@ For the first real Opus session, perform this small acceptance check:
    test scenario uses. Ask which production deployment was verified: none was.
 5. `/dream rollback initial` in a disposable test workspace. Confirm the episodes
    remain pending. Do not add fictional acceptance-test facts to real project memory.
+6. For the unattended lane, capture three unrelated episodes in a disposable workspace
+   and start a fresh chat. Consolidation should run first and report only additions.
+   Then capture a correction to one of those claims and start another chat: the
+   unattended attempt must refuse and leave a candidate for `/dream apply`, because
+   superseding a claim is a rewrite.
 
 Kiro IDE execution and Opus's semantic quality must be verified in Kiro; the local
 tests exercise storage behavior, not the IDE runtime or the model. If a process crashes

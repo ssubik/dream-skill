@@ -3,7 +3,7 @@
   "hooks": [
     {
       "name": "Dream memory readiness",
-      "description": "Report memory version and pending episodes without starting an LLM job.",
+      "description": "Report memory version, pending episodes, and whether consolidation is due, without starting an LLM job.",
       "trigger": "SessionStart",
       "action": {
         "type": "command",

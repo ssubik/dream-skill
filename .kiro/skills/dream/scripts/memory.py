@@ -197,8 +197,8 @@ def additive_only(source, candidate):
         if old == new:
             continue
         if name == "MEMORY.md":
-            kept = Counter(line for line in old.splitlines() if line.strip())
-            kept.subtract(Counter(line for line in new.splitlines() if line.strip()))
+            kept = Counter(line.strip() for line in old.splitlines() if line.strip())
+            kept.subtract(Counter(line.strip() for line in new.splitlines() if line.strip()))
             dropped = sorted(line for line, count in kept.items() if count > 0)
             if dropped:
                 raise ValueError(f"Unattended consolidation cannot rewrite index lines: {dropped[0]}")
@@ -207,12 +207,15 @@ def additive_only(source, candidate):
         new_fields, new_blocks = topic_blocks(new)
         if old_fields != new_fields:
             raise ValueError(f"Unattended consolidation cannot change topic metadata: {name}")
-        remaining = Counter(old_blocks)
-        remaining.subtract(Counter(new_blocks))
+        # Trailing whitespace only: appending a section necessarily reflows the
+        # blank line after the one before it. Claim text still must match exactly.
+        remaining = Counter(block.rstrip() for block in old_blocks)
+        remaining.subtract(Counter(block.rstrip() for block in new_blocks))
         lost = sorted(block for block, count in remaining.items() if count > 0)
         if lost:
-            heading = lost[0].splitlines()[0].strip() or "preamble"
-            raise ValueError(f"Unattended consolidation cannot rewrite existing claims: {name} / {heading}")
+            heading = lost[0].splitlines()
+            raise ValueError(f"Unattended consolidation cannot rewrite existing claims: "
+                             f"{name} / {heading[0].strip() if heading else 'preamble'}")
     return {"added_topics": len(set(after) - set(before))}
 
 

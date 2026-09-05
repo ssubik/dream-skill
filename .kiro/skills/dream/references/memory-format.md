@@ -49,7 +49,9 @@ updated: 2026-09-06
 Types: `project`, `user`, `feedback`, `reference`, `insight`. A user preference here
 is project-scoped unless the user explicitly establishes a broader scope.
 
-Each durable claim needs `Kind:`, `Scope:`, and `Evidence:` fields in its section.
+Each durable claim belongs in its own `## ` section, because the additive-only lane
+below compares whole sections: a claim split across sections cannot be extended later
+without counting as a rewrite. Each claim needs `Kind:`, `Scope:`, and `Evidence:`.
 Kinds: fact, decision, preference, correction, lesson, hypothesis, unresolved.
 Use episode paths relative to `.kiro/memory/` and enough excerpt/context to audit the
 claim. Existing imported claims with unavailable evidence must be labeled unverified.
@@ -77,6 +79,19 @@ not a reason to discard useful evidence. Split by task-relevant subject when nee
 All topics must be linked exactly once; all links must exist. Limit the index to
 120 lines and 12 KiB to keep retrieval cheap. Topic detail does not belong in the
 index. Do not index raw episodes, reports, or old stores. An empty index is valid.
+
+## Additive-only promotion
+
+`promote --unattended` accepts a candidate only if it adds. New topics and new `## `
+sections are allowed, and `updated:` may change; existing claim text, other frontmatter
+fields, and existing index lines must stay byte-identical apart from trailing blank
+lines. Merging duplicates, rewording, reconciling a conflict, and retiring a claim all
+require an attended `/dream`. The check is structural: it proves nothing was overwritten,
+not that an addition is correct.
+
+Because additions accumulate, `status` reports `compaction_recommended` when the index
+passes three quarters of its limit or several unattended versions have run with no
+reconciliation. Treat that as the signal to run an attended dream, not as an error.
 
 ## Retention and concurrency
 

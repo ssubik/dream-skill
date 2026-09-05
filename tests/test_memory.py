@@ -121,6 +121,104 @@ class MemoryTests(unittest.TestCase):
         self.run_quiet(memory.promote, name)
         self.assertEqual(memory.validate(memory.active()[1])["topics"], 1)
 
+    def topic(self, claim="Use the repository test runner.", updated="2026-09-06"):
+        return ("---\nname: testing\ndescription: Test workflow\ntype: project\n"
+                f"updated: {updated}\n---\n"
+                "## Test runner\nKind: fact\nScope: repository\n"
+                f"Evidence: pyproject.toml inspected today\n{claim}\n")
+
+    def store_with_topic(self):
+        """Promote one topic so later dreams have an existing claim to protect."""
+        (self.root / "episodes/one.md").write_text("First claim")
+        name, path = self.candidate()
+        (path / "output/topics").mkdir()
+        (path / "output/topics/testing.md").write_text(self.topic())
+        (path / "output/MEMORY.md").write_text(
+            "# Memory Index\n- [Testing](topics/testing.md) — Test workflow.\n")
+        self.run_quiet(memory.promote, name, True)
+        self.store = name
+        return name
+
+    def test_unattended_promotion_accepts_additions(self):
+        self.store_with_topic()
+        (self.root / "episodes/two.md").write_text("Second claim")
+        name, path = self.candidate()
+        topics = path / "output/topics"
+        (topics / "testing.md").write_text(self.topic(updated="2026-09-07") + (
+            "\n## Coverage\nKind: fact\nScope: repository\nEvidence: episode two\n"
+            "Coverage runs in CI.\n"))
+        (topics / "deploy.md").write_text(
+            "---\nname: deploy\ndescription: Deploys\ntype: project\nupdated: 2026-09-07\n---\n"
+            "## Target\nKind: decision\nScope: repository\nEvidence: episode two\nStaging first.\n")
+        (path / "output/MEMORY.md").write_text(
+            "# Memory Index\n- [Testing](topics/testing.md) — Test workflow.\n"
+            "- [Deploy](topics/deploy.md) — Deploys.\n")
+        result = self.run_quiet(memory.promote, name, True)
+        self.assertTrue(result["unattended"])
+        self.assertEqual(result["validation"]["added_topics"], 1)
+        self.assertEqual(memory.validate(memory.active()[1])["topics"], 2)
+
+    def test_unattended_promotion_rejects_rewriting_an_existing_claim(self):
+        self.store_with_topic()
+        (self.root / "episodes/two.md").write_text("Second claim")
+        name, path = self.candidate()
+        (path / "output/topics/testing.md").write_text(self.topic(claim="Use Cedar instead."))
+        with self.assertRaisesRegex(ValueError, "cannot rewrite existing claims"):
+            memory.promote(name, True)
+        self.assertNotEqual(memory.active()[0], name)
+        # The same candidate remains promotable through the attended lane.
+        self.run_quiet(memory.promote, name)
+        self.assertEqual(memory.active()[0], name)
+
+    def test_unattended_promotion_rejects_deletion_and_index_rewrite(self):
+        self.store_with_topic()
+        (self.root / "episodes/two.md").write_text("Second claim")
+        name, path = self.candidate()
+        (path / "output/topics/testing.md").unlink()
+        (path / "output/MEMORY.md").write_text("# Memory Index\n")
+        with self.assertRaisesRegex(ValueError, "cannot remove"):
+            memory.promote(name, True)
+        # A structurally valid index that rewords an existing link is still a rewrite.
+        (path / "output/topics/testing.md").write_text(self.topic())
+        (path / "output/MEMORY.md").write_text(
+            "# Memory Index\n- [Testing](topics/testing.md) — Reworded description.\n")
+        with self.assertRaisesRegex(ValueError, "cannot rewrite index lines"):
+            memory.promote(name, True)
+        self.assertEqual(memory.active()[0], self.store)
+
+    def test_unattended_promotion_rejects_topic_metadata_change(self):
+        self.store_with_topic()
+        (self.root / "episodes/two.md").write_text("Second claim")
+        name, path = self.candidate()
+        (path / "output/topics/testing.md").write_text(
+            self.topic().replace("type: project", "type: insight"))
+        with self.assertRaisesRegex(ValueError, "cannot change topic metadata"):
+            memory.promote(name, True)
+
+    def test_status_reports_cadence_and_compaction_signals(self):
+        first = self.run_quiet(memory.status)
+        self.assertIsNone(first["hours_since_consolidation"])
+        self.assertFalse(first["unattended_recommended"])
+        for index in range(memory.UNATTENDED_MIN_EPISODES):
+            (self.root / f"episodes/e{index}.md").write_text(f"Claim {index}")
+        # Never consolidated: the cadence floor does not block the first run.
+        self.assertTrue(self.run_quiet(memory.status)["unattended_recommended"])
+        name = self.store_with_topic()
+        after = self.run_quiet(memory.status)
+        self.assertEqual(after["version"], name)
+        self.assertEqual(after["unattended_streak"], 1)
+        self.assertEqual(after["topics"], 1)
+        self.assertLess(after["hours_since_consolidation"], 1)
+        self.assertFalse(after["unattended_recommended"])  # Inside the cadence window.
+        self.assertFalse(after["compaction_recommended"])
+
+    def test_attended_promotion_leaves_no_unattended_marker(self):
+        (self.root / "episodes/one.md").write_text("First claim")
+        name, _ = self.candidate()
+        self.run_quiet(memory.promote, name)
+        self.assertFalse((self.root / "dreams" / name / "unattended").exists())
+        self.assertEqual(self.run_quiet(memory.status)["unattended_streak"], 0)
+
     def test_unreviewed_episode_and_modified_snapshot_rejected(self):
         (self.root / "episodes/one.md").write_text("Original")
         name, path = self.candidate()

@@ -21,6 +21,8 @@ below run from the workspace root. The helper uses Python 3.9+ standard library 
   and report the candidate ID for later application.
 - `/dream apply <id>`: inspect that candidate's report and diff, validate, then promote.
 - `/dream rollback <version>`: use `rollback <version>`; report both version IDs.
+- Unattended, at session start when `status` reports `unattended_recommended`: follow
+  **Unattended consolidation** below. Additions only, and it promotes itself.
 
 ## Consolidation
 
@@ -63,6 +65,30 @@ End with version or candidate ID, important changes, unresolved questions, input
 coverage, validation result, and the rollback command. Explain only the decisive
 evidence, not private step-by-step reasoning. If no transcripts were supplied, clearly
 describe the inputs as saved episodes and existing memory.
+
+## Unattended consolidation
+
+Run this only when session-start status reports `unattended_recommended`, and keep it
+brief: it precedes the user's actual request. Skip it and say so in one clause if their
+request is urgent or clearly unrelated.
+
+1. Follow Consolidation steps 1–6 with one restriction: add new topics and new `## `
+   claim sections from the selected episodes, and leave every existing claim, its
+   wording, and the existing index lines untouched. Only `updated:` may change in
+   existing frontmatter. Ignore the batch-continuation step; one batch per session.
+2. If the evidence mainly calls for merging duplicates, reconciling a conflict, or
+   superseding an existing claim, stop and leave the candidate for an attended `/dream`.
+   Report the candidate ID rather than working around the restriction.
+3. Confirm with `validate --dream <id> --unattended`, then promote with
+   `promote <id> --unattended`. The helper enforces the restriction independently. A
+   rejection means reflection rewrote something: leave that candidate for review and do
+   not retry without the flag.
+4. Report one or two lines — new version, what was added, any candidate awaiting review.
+
+The helper checks only that prior evidence was not overwritten; it cannot judge whether
+an addition is true. Keep unattended additions conservative, attributed, and scoped.
+When `compaction_recommended` is true, say once that an attended `/dream` is due:
+duplicates accumulate under an additive-only lane and only reconciliation removes them.
 
 ## Boundaries
 

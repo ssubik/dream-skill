@@ -1,0 +1,9 @@
+# Local evidence and version history may contain private project conversations.
+# Review explicitly before opting into sharing these generated files.
+episodes/
+dreams/
+.write-lock
+CURRENT
+stores/*
+!stores/initial/
+!stores/initial/**

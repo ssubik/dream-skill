@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/skills/dream/scripts/memory.py status"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(python3 .claude/skills/dream/scripts/memory.py status)",
+      "Bash(python3 .claude/skills/dream/scripts/memory.py validate:*)",
+      "Bash(python3 .claude/skills/dream/scripts/memory.py diff:*)"
+    ]
+  }
+}

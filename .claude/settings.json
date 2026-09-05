@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/skills/dream/scripts/memory.py status"
+            "command": "test -z \"$(find .claude/dreaming/.last-dream -mtime -1 2>/dev/null)\" && echo 'Memory: a dream is due (no consolidation in the last 24h). Offer /dream at a natural stopping point.' || true"
           }
         ]
       }
@@ -14,9 +14,8 @@
   },
   "permissions": {
     "allow": [
-      "Bash(python3 .claude/skills/dream/scripts/memory.py status)",
-      "Bash(python3 .claude/skills/dream/scripts/memory.py validate:*)",
-      "Bash(python3 .claude/skills/dream/scripts/memory.py diff:*)"
+      "Bash(cat .claude/dreaming/MEMORY.md)",
+      "Bash(ls .claude/dreaming/topics)"
     ]
   }
 }

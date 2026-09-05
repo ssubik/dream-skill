@@ -3,11 +3,11 @@
   "hooks": [
     {
       "name": "Dream memory readiness",
-      "description": "Report memory version, pending episodes, and whether consolidation is due, without starting an LLM job.",
+      "description": "Report whether a memory consolidation is due. Starts no LLM job.",
       "trigger": "SessionStart",
       "action": {
         "type": "command",
-        "command": "python3 .kiro/skills/dream/scripts/memory.py status"
+        "command": "test -z \"$(find .kiro/dreaming/.last-dream -mtime -1 2>/dev/null)\" && echo 'Memory: a dream is due (no consolidation in the last 24h). Offer /dream at a natural stopping point.' || true"
       },
       "timeout": 10
     }

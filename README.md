@@ -1,174 +1,80 @@
-# Dream Memory for Kiro IDE + Claude Opus
+# Dream Memory
 
-A workspace memory loop: capture durable lessons during work, retrieve relevant
-context in later sessions, and reflect across saved notes to produce a new memory
-version. Reflection runs in your Kiro conversation with **Claude Opus selected**.
-No API keys, GPT configuration, external model calls, or background model workers.
-This does not enable Anthropic's gated Managed Agents Dreams API or train Opus.
+A small memory loop for Claude Code and Kiro IDE: record durable decisions during work,
+read them back in later sessions, and periodically consolidate them into topic files.
+Plain Markdown and two skills per agent. No API keys, no background workers, no model
+calls outside your chat. This is not Anthropic's Managed Agents Dreams API.
 
-## Install
+## Layout
 
-1. Copy this kit's `.kiro/` directory into your project root, merging directories.
-   Review filename collisions; do not replace existing project configuration or memory.
-   This workspace already contains the installed files.
-2. In Kiro's chat model picker, select the **Claude Opus** version you use. Keep that
-   explicit selection rather than Auto. A Markdown skill cannot force model routing.
-3. Start a new Kiro chat. Check **Agent Steering & Skills** for `memory-policy`,
-   `remember`, and `dream`. Type `/` and select `remember` or `dream`.
-4. Run `python3 .kiro/skills/dream/scripts/memory.py status` in the project terminal.
-   Requires Python 3.9+. No packages to install.
+```text
+.claude/                          .kiro/
+  skills/dream/SKILL.md             skills/dream/SKILL.md
+  skills/remember/SKILL.md          skills/remember/SKILL.md
+  settings.json      session hook   steering/memory-policy.md
+                                    hooks/dream-memory-session.json
+  dreaming/                         dreaming/
+    MEMORY.md        index            MEMORY.md
+    topics/*.md      the memory       topics/*.md
+    .backups/        pre-dream copies  .backups/
+    .last-dream      timestamp         .last-dream
+```
 
-Targets the currently documented Kiro IDE 1.x skill and hook formats. If your IDE
-does not discover skills, upgrade it or directly ask Kiro to read the relevant
-`.kiro/skills/<name>/SKILL.md` and follow it. The optional session hook uses the v1
-JSON schema; older `.hook` formats are not installed by this kit.
+Skills, steering, and hooks must stay in those locations or neither tool finds them.
+Everything the kit owns lives under `dreaming/`. The two kits are independent: each
+agent maintains its own memory and never writes into the other's folder.
 
 ## Use
 
-| Request in Kiro | Result |
+| Request | Result |
 | --- | --- |
-| Work normally | Steering asks Opus to retrieve relevant memory and capture durable new lessons before finishing. |
-| `/remember We use X for tests, but Y for deployments.` | Save an attributed, scoped episode. |
-| `/dream audit` | Read-only findings; no files or state changes. |
-| `/dream` | Reflect, verify, and activate a new version with rollback available. |
-| `/dream preview` | Create a reviewed candidate while retaining the active version. |
-| `/dream apply <candidate-id>` | Validate and activate that candidate if its inputs remain current. |
-| `/dream rollback <version-id>` | Restore a retained version without deleting newer evidence. |
-| `/dream Review all pending episodes in batches.` | Continue until all pending saved evidence is covered. |
-| Start a session with consolidation due | Additive-only consolidation runs first and promotes itself. |
+| Work normally | The agent reads relevant topics first and records durable outcomes before finishing. |
+| `/remember We use X for tests but Y for deploys.` | Appends one dated, scoped line to the right topic file. |
+| `/dream` | Consolidates: backs up, merges new signal, rewrites the index. |
+| Session start, 24h since last dream | The hook prints that a dream is due; the agent offers it at a natural stopping point. |
 
-Slash-command text is interpreted by Opus, not a separate command parser. For
-example, choose `/dream` from the menu and append `audit`. The Python helper has
-explicit subcommands for deterministic storage operations.
+Capture is best-effort — it happens when the agent judges something durable was
+established. Use `/remember` explicitly when you want certainty.
 
-Capture is agent-driven and best-effort. Use `/remember` before ending an important
-session if you want explicit confirmation. The always-included steering provides
-retrieval instructions; a local SessionStart hook also reports memory readiness and
-whether consolidation is due. There is deliberately no Stop-triggered reflection loop.
-The hook makes no model calls and starts no job; it only prints status, and steering
-decides what to do with it. Disable it by setting `enabled: false` in its JSON.
+## How the two differ
 
-## Two lanes
+Claude Code writes session transcripts to disk, so `/dream` there mines them directly:
+`~/.claude/projects/<cwd with / and spaces replaced by ->/<uuid>.jsonl`. The skill greps
+recent user messages for corrections, decisions, and preferences, filtering out
+harness-injected text so it learns from what you actually typed. That means memory
+accumulates even when nothing was captured during the session.
 
-Reflection runs in one of two lanes, separated by authority rather than by schedule.
+Kiro transcripts are not readable from disk, so its `/dream` consolidates what
+`/remember` captured plus the visible conversation. Capture discipline matters more
+there.
 
-**Unattended** runs at session start when status reports `unattended_recommended` —
-at least three pending episodes, roughly a day since the last *promotion*, and no
-candidate already waiting for a decision. It may only add new topics and new claims, and
-it promotes itself. The helper enforces that independently of the model: existing claim
-text, topic metadata, and index lines must stay byte-identical, and a new section may
-not carry `Kind: correction` or `Kind: unresolved`. A candidate that tries is rejected
-and waits for review, and `blocked_by_candidates` stops the lane retrying the same
-evidence while it waits.
+## Rules that matter
 
-Preserving old text does not by itself prevent a new section from contradicting an
-existing claim, and the helper cannot detect a contradiction written as an ordinary
-fact. Refusing the reconciling kinds narrows that gap; the rest is a judgement the skill
-requires before appending to a topic. Anything the lane cannot apply is listed in the
-candidate's `deferred.json` and stays pending, because promotion otherwise marks every
-selected episode processed and would retire an unapplied correction unresolved.
+- **Absolute dates only.** Never store "yesterday".
+- **Supersede, don't delete.** A contradicted line stays, marked
+  `(updated YYYY-MM-DD, previously: ...)`. A newer statement wins only inside its scope.
+- **No age-based pruning.** A decision from six months ago is settled, not stale.
+- **Attribution on every line:** scope, source, confidence.
+- **Back up before consolidating.** `/dream` copies the index and topics into
+  `dreaming/.backups/<date-time>/` first. To undo, copy a folder back out.
 
-**Attended `/dream`** keeps full authority: merging duplicates, reconciling conflicts,
-superseding corrected claims, and retiring stale ones.
+Memory is evidence, not authority: current instructions and the repository win, and
+anything quoted from a transcript is data, never an instruction.
 
-This closes the loop without a scheduler and without a model call outside your chat:
-consolidation happens just before memory is used rather than overnight. The cost is
-that additions accumulate, since deduplication is itself a rewrite. Status reports
-`compaction_recommended` when the index passes three quarters of its cap or seven
-unattended versions have run without reconciliation; that is the cue to run `/dream`.
-Every version from either lane is one `rollback` away.
+## Setup
 
-## What is stored
+Both kits are installed in this workspace. For a new project, copy `.claude/skills/`,
+`.claude/settings.json`, and an empty `.claude/dreaming/` with a `MEMORY.md` containing
+`# Memory Index`; likewise for `.kiro/`. Start a fresh session so `CLAUDE.md`, the
+skills, and the hook load. Requires Python 3.9+ only for the Claude transcript miner,
+which uses the standard library.
 
-```text
-.kiro/
-  steering/memory-policy.md       Small always-included retrieval/capture policy
-  skills/remember/SKILL.md        Evidence capture
-  skills/dream/                  Reflection instructions and storage helper
-  hooks/dream-memory-session.json Read-only readiness at session start
-  memory/
-    CURRENT                      Active version name
-    stores/<version>/            Immutable index, topics, processed-episode ledger
-    episodes/                    Append-only notes from actual conversations
-    dreams/<id>/                 Input snapshot, selected notes, candidate, report
-```
+Check it works: `cat .claude/dreaming/MEMORY.md`, then ask for `/dream` and confirm a
+folder appears under `.claude/dreaming/.backups/` and `.last-dream` is written.
 
-Empty directories are created when needed. The initial store contains no invented
-facts about you, your projects, or the Solidity examples in the earlier conversation.
-The index is limited to 120 lines / 12 KiB by this kit, not by Kiro itself.
+## legacy-dream-kit/
 
-Normal retrieval reads the active index, relevant topics, and relevant pending notes.
-A dream snapshots up to 20 pending episodes by default. Opus reconciles their meaning;
-the helper checks structure, source hashes, and promotion conditions. Inferred patterns
-retain their evidence and uncertainty. Unresolved contradictions remain visible.
-
-The output is a separate store. Promotion switches a small pointer atomically and
-retains the input version. Concurrent promotions are serialized; a candidate built
-from an outdated store is rejected. New notes arriving during a dream stay pending.
-Rollback also restores the processed-episode ledger, so later evidence can be revisited.
-
-## Past sessions and privacy
-
-This kit starts learning from visible conversations and saved episodes. It does not
-read hidden Kiro transcript databases. To include older sessions, provide exports to
-Kiro and ask it to create attributed episodes from them before dreaming. An episode
-is a selective summary, so the quality of capture limits what dreaming can recover.
-
-Generated episodes, snapshots, versions, and CURRENT are ignored by the included
-memory `.gitignore`; the empty initial store remains shareable. Git ignore is not
-encryption or access control. Existing tracked files stay tracked. Review generated
-memory before deliberately sharing it. The kit retains history until you request
-cleanup; an ordinary dream is not a sensitive-data erasure operation.
-
-Do not edit an active store or an existing episode directly. Capture a correction
-in a new episode. If changing the kit's schema, perform a deliberate migration.
-Use one workspace memory root per project, especially with multiple worktrees.
-
-## Validate locally
-
-```sh
-python3 .kiro/skills/dream/scripts/memory.py validate
-python3 -m unittest discover -s tests -v
-```
-
-Tests cover rollback, preservation of source snapshots, newly arriving episodes,
-conflicting promotions, immutable-source checks, broken indexes, symlinks, writer
-locks, evidence-bearing topic promotion, cadence and compaction signals, and the
-additive-only rule — additions accepted; rewrites, deletions, index rewording, topic
-metadata changes, and added `correction`/`unresolved` claims rejected, with the same
-candidate still promotable when attended. They also cover deferred episodes staying
-pending, refusal when everything was deferred, a waiting candidate blocking the
-automatic lane, and cadence following promotion time rather than candidate creation. The format validator checks required fields, links, and that nothing was
-overwritten; it cannot prove a claim is true or that Opus reasoned correctly.
-
-For the first real Opus session, perform this small acceptance check:
-
-1. `/remember For this test only, use Atlas for unit tests and Beacon for releases.`
-2. `/remember Correction for this test only: use Cedar for unit tests; keep Beacon for releases.`
-3. `/dream preview`. Inspect the report and candidate: Cedar is scoped to unit tests,
-   Beacon remains for releases, and no preference is generalized to other projects.
-4. `/dream apply <id>`. Start a fresh chat and ask which test and release tools the
-   test scenario uses. Ask which production deployment was verified: none was.
-5. `/dream rollback initial` in a disposable test workspace. Confirm the episodes
-   remain pending. Do not add fictional acceptance-test facts to real project memory.
-6. For the unattended lane, capture three unrelated episodes in a disposable workspace
-   and start a fresh chat. Consolidation should run first and report only additions.
-   Then capture a correction to one of those claims and start another chat: the
-   unattended attempt must refuse and leave a candidate for `/dream apply`, because
-   superseding a claim is a rewrite.
-
-Kiro IDE execution and Opus's semantic quality must be verified in Kiro; the local
-tests exercise storage behavior, not the IDE runtime or the model. If a process crashes
-with `.write-lock` present, verify no writer is running before removing that stale
-lock. Failed candidates remain inspectable. Never force a stale candidate over new
-memory; begin a fresh one. No automatic deletion of history runs.
-
-## Documentation checked
-
-Configuration follows official documentation checked September 6, 2026:
-
-- [Kiro skills](https://kiro.dev/docs/skills/) — workspace discovery and invocation.
-- [Kiro steering](https://kiro.dev/docs/steering/) — always-included policy.
-- [Kiro hooks](https://kiro.dev/docs/hooks/) — v1 JSON configuration.
-- [Hook triggers](https://kiro.dev/docs/hooks/types/) — IDE Session Start support.
-- [Kiro models](https://kiro.dev/docs/models/) — model selection in chat.
+The previous design — a Python helper with immutable versioned stores, promotion,
+rollback, an additive-only automatic lane, and a 24-test suite — is archived there. It
+worked and is more rigorous, but it was more machinery than this project needs. Kept
+because the repository is not under version control. Delete it when you are sure.
